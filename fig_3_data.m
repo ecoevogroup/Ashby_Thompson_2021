@@ -1,5 +1,5 @@
-function fig_3_data
-
+% function fig_3_data
+cc
 % fig_3_data.m
 %
 % Generates data for figure 3 - note, due to the random number generator,
@@ -8,17 +8,18 @@ function fig_3_data
 % Fixed parameters
 N = 1e5;
 I0 = 100;
-alpha1 = 0.005;
-alpha2 = alpha1;
 R0 = 3;
 gamma = 1/5;
-beta1 = R0*gamma/N;
+alpha1 = gamma/49;
+alpha2 = alpha1;
+beta1 = R0*(alpha1+gamma)/N;
 beta2 = beta1*1.5;
 xi = 1e-5/gamma;
 MaxTime = 365;
 maxSteps = 1e7;
 simtotal = 10;
-NPIthreshold = 0;
+NPIthreshold_on = 0;
+NPIthreshold_off = 0;
 c = 1;
 
 % Variables
@@ -39,7 +40,7 @@ for k=1:length(R)
     I21_OUT = zeros(MaxTime+1,simtotal);
     C_OUT = zeros(MaxTime+1,simtotal);
     for s=1:simtotal
-        [T, ~, I1, I2, C, I12, I21, ~, ~, ~, ~, ~] = variantevo(MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, N, I0, NPIthreshold, maxSteps, 1);
+        [T, ~, I1, I2, C, I12, I21, ~, ~, ~, ~, ~] = variantevo(MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, N, I0, NPIthreshold_on, NPIthreshold_off, maxSteps, 1);
         
         for t=0:MaxTime
             t_temp = find(T>=t,1);
@@ -72,6 +73,6 @@ for k=1:length(R)
     end
     
     % Uncomment line below to save data
-    % save(strcat('Data/fig_3_data_',num2str(r),'.mat'))
+    save(strcat('Data/fig_3_data_',num2str(r),'.mat'))
 end
 

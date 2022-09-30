@@ -1,5 +1,5 @@
 /******************************************************
- * [T, S, I1, I2, C, I12, I21, R1, R2, R, D, I2freqmax] = variantevo(MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, N, I0, NPIthreshold, maxSteps, fullOutput);
+ * [T, S, I1, I2, C, I12, I21, R1, R2, R, D, I2freqmax] = variantevo_temp(MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, N, I0, NPIthreshold_on, NPIthreshold_off, maxSteps, fullOutput);
  ******************************************************/
 
 #include <mex.h>
@@ -8,19 +8,19 @@
 /*******************
  * Function prototypes
  *******************/
-int simulation(double MaxTime, double alpha1, double alpha2, double beta1, double beta2, double gamma, double xi, double c, double r, int N, int I0, double NPIthreshold, int maxSteps, int fullOutput, double *T_temp, double *S_temp, double *I1_temp, double *I2_temp, double *C_temp, double *I12_temp, double *I21_temp, double *R1_temp, double *R2_temp, double *R_temp, double *D_temp, double *I2freqmax);
+int simulation(double MaxTime, double alpha1, double alpha2, double beta1, double beta2, double gamma, double xi, double c, double r, int N, int I0, double NPIthreshold_on, double NPIthreshold_off, int maxSteps, int fullOutput, double *T_temp, double *S_temp, double *I1_temp, double *I2_temp, double *C_temp, double *I12_temp, double *I21_temp, double *R1_temp, double *R2_temp, double *R_temp, double *D_temp, double *I2freqmax);
 double FMAX(double l, double r);
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    double MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, NPIthreshold, *parameter;
+    double MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, NPIthreshold_on, NPIthreshold_off, *parameter;
     double *T_temp, *S_temp, *I1_temp, *I2_temp, *C_temp, *I12_temp, *I21_temp, *R1_temp, *R2_temp, *R_temp, *D_temp, *I2freqmax;
     double *T_out, *S_out, *I1_out, *I2_out, *C_out, *I12_out, *I21_out, *R1_out, *R2_out, *R_out, *D_out;
     int i, colLen;
     int N, I0, maxSteps, fullOutput;
     
     /* Allocate inputs */
-    if(nrhs!=14){
+    if(nrhs!=15){
         mexErrMsgTxt("Incorrect number of input arguments!\n");
     }
     else{
@@ -47,10 +47,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         parameter= mxGetPr(prhs[10]);
         I0= (int)*parameter;
         parameter= mxGetPr(prhs[11]);
-        NPIthreshold= *parameter;
+        NPIthreshold_on= *parameter;
         parameter= mxGetPr(prhs[12]);
-        maxSteps= (int)*parameter;
+        NPIthreshold_off= *parameter;
         parameter= mxGetPr(prhs[13]);
+        maxSteps= (int)*parameter;
+        parameter= mxGetPr(prhs[14]);
         fullOutput= (int)*parameter;
     }
     
@@ -88,7 +90,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     /* Call main routine */
     colLen = 1;
-    colLen = simulation(MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, N, I0, NPIthreshold, maxSteps, fullOutput, T_temp, S_temp, I1_temp, I2_temp, C_temp, I12_temp, I21_temp, R1_temp, R2_temp, R_temp, D_temp, I2freqmax);
+    colLen = simulation(MaxTime, alpha1, alpha2, beta1, beta2, gamma, xi, c, r, N, I0, NPIthreshold_on, NPIthreshold_off, maxSteps, fullOutput, T_temp, S_temp, I1_temp, I2_temp, C_temp, I12_temp, I21_temp, R1_temp, R2_temp, R_temp, D_temp, I2freqmax);
     
     /* Create outputs */
     plhs[0] = mxCreateDoubleMatrix(colLen, 1, mxREAL);
@@ -149,9 +151,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 /*********************
  * Main simulation loop
  ********************/
-int simulation(double MaxTime, double alpha1, double alpha2, double beta1, double beta2, double gamma, double xi, double c, double r, int N, int I0, double NPIthreshold, int maxSteps, int fullOutput, double *T_temp, double *S_temp, double *I1_temp, double *I2_temp, double *C_temp, double *I12_temp, double *I21_temp, double *R1_temp, double *R2_temp, double *R_temp, double *D_temp, double *I2freqmax){
+int simulation(double MaxTime, double alpha1, double alpha2, double beta1, double beta2, double gamma, double xi, double c, double r, int N, int I0, double NPIthreshold_on, double NPIthreshold_off, int maxSteps, int fullOutput, double *T_temp, double *S_temp, double *I1_temp, double *I2_temp, double *C_temp, double *I12_temp, double *I21_temp, double *R1_temp, double *R2_temp, double *R_temp, double *D_temp, double *I2freqmax){
     
-    double t, S, I1, I2, C, I12, I21, R1, R2, R, D, lambda1, lambda2;
+    double t, t_temp, r_temp, S, I1, I2, C, I12, I21, R1, R2, R, D, lambda1, lambda2;
     double rate[16], sumRate, cumSumRate[16], randnum;
     int i, count, event, NPIflag;
     
@@ -168,7 +170,7 @@ int simulation(double MaxTime, double alpha1, double alpha2, double beta1, doubl
     R2 = 0;
     R = 0;
     D = 0;
-    NPIflag = 1;
+    NPIflag = 0;
     
     /* Update output */
     T_temp[0] = t;
@@ -187,14 +189,15 @@ int simulation(double MaxTime, double alpha1, double alpha2, double beta1, doubl
     while(t<MaxTime && count<(maxSteps-1)){
         
         /* Force of infection */
-        if(NPIflag && (((I1+I2+I12+I21+C)/N)<NPIthreshold)){
+        if((((I1+I2+I12+I21+C)/N)<NPIthreshold_off) || (((I1+I2+I12+I21+C)/N)<NPIthreshold_on && NPIflag==0)){
             lambda1 = beta1*(I1+I21+C);
             lambda2 = beta2*(I2+I12+C);
+            NPIflag = 0;
         }
         else{
-            NPIflag = 0;
             lambda1 = beta1*(I1+I21+C)*(1-r);
             lambda2 = beta2*(I2+I12+C)*(1-r);
+            NPIflag = 1;
         }
         
         /* Rates for each event */
@@ -204,16 +207,16 @@ int simulation(double MaxTime, double alpha1, double alpha2, double beta1, doubl
         rate[3] = (lambda1*(1-c) + xi)*I2; /* Coinfection/mutation from I2 to C */
         rate[4] = lambda2*R1*(1-c); /* Infection of R1 by strain 2 */
         rate[5] = lambda1*R2*(1-c); /* Infection of R2 by strain 1 */
-        rate[6] = gamma*I1*(1-alpha1); /* Recovery from strain 1 (primary infection) */
-        rate[7] = gamma*I2*(1-alpha2); /* Recovery from strain 2 (primary infection) */
-        rate[8] = gamma*I21*(1-alpha1); /* Recovery from strain 1 (secondary infection) */
-        rate[9] = gamma*I12*(1-alpha2); /* Recovery from strain 2 (secondary infection) */
-        rate[10] = gamma*C*(1-(alpha1+alpha2)/2); /* Recovery from coinfection */
-        rate[11] = gamma*I1*alpha1; /* Death from strain 1 (primary infection) */
-        rate[12] = gamma*I2*alpha2; /* Death from strain 2 (primary infection) */
-        rate[13] = gamma*I21*alpha1; /* Death from strain 1 (secondary infection) */
-        rate[14] = gamma*I12*alpha2; /* Death from strain 2 (secondary infection) */
-        rate[15] = gamma*C*(alpha1+alpha2)/2; /* Death from coinfection */
+        rate[6] = gamma*I1; /* Recovery from strain 1 (primary infection) */
+        rate[7] = gamma*I2; /* Recovery from strain 2 (primary infection) */
+        rate[8] = gamma*I21; /* Recovery from strain 1 (secondary infection) */
+        rate[9] = gamma*I12; /* Recovery from strain 2 (secondary infection) */
+        rate[10] = gamma*C; /* Recovery from coinfection */
+        rate[11] = I1*alpha1; /* Death from strain 1 (primary infection) */
+        rate[12] = I2*alpha2; /* Death from strain 2 (primary infection) */
+        rate[13] = I21*alpha1; /* Death from strain 1 (secondary infection) */
+        rate[14] = I12*alpha2; /* Death from strain 2 (secondary infection) */
+        rate[15] = C*(alpha1+alpha2)/2; /* Death from coinfection */
     
         /* Sum and cumulative sum of rate vector */
         sumRate = 0;
@@ -225,6 +228,7 @@ int simulation(double MaxTime, double alpha1, double alpha2, double beta1, doubl
         
         /* Next event */
         if(sumRate<=0){
+            printf("sumRate<=0\n");
             break;
         }
         else{
@@ -305,7 +309,12 @@ int simulation(double MaxTime, double alpha1, double alpha2, double beta1, doubl
         }
 
         /* Update time step */
-        t = t - log((double)rand()/(double)RAND_MAX)/sumRate;
+        r_temp = 0;
+        while(r_temp==0){
+            r_temp = (double)rand();
+        }
+        t_temp = -log(r_temp/(double)RAND_MAX)/sumRate;
+        t = t + t_temp;
         
         /* Update outputs */
         count++;
